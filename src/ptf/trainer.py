@@ -2,26 +2,27 @@ from torch.utils.data import DataLoader
 
 
 class _BaseTrainer:
-    def __init__(self, hparams: dict) -> None:
+    def __init__(self, hparams: dict, modules: dict) -> None:
+        self.hparams = hparams
         self.epoch_duration = hparams["epoch_duration"]
         self.batch_size = hparams["batch_size"]
+        
+        self.modelus = modules
+        self.dataset = modules["dataset"]
+        self.network = modules["network"]
+        self.model = modules["model"]
+        self.optimzer = modules["optimizer"]
     
-    def train_loop(
-        self, 
-        dataset, 
-        network, 
-        criterion, 
-        optimizer,
-        ) -> None:
-        data_loader = DataLoader(dataset, self.batch_size, shuffle=True)
-        network.train()
+    def loop(self) -> None:
+        data_loader = DataLoader(self.dataset, self.batch_size, shuffle=True)
+        self.network.train()
         
         for epoch in range(self.epoch_duration):
             for step, batch in enumerate(data_loader):
-                optimizer.zero_grad()
-                loss = criterion(network, batch)
+                self.optimizer.zero_grad()
+                loss = self.model.compute_loss(self.network, batch)
                 loss.backward()
-                optimizer.step()
+                self.optimizer.step()
         
-        optimizer.zero_grad()
-        network.eval()
+        self.optimizer.zero_grad()
+        self.network.eval()
