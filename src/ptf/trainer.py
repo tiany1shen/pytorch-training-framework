@@ -12,17 +12,54 @@ class _BaseTrainer:
         self.network = modules["network"]
         self.model = modules["model"]
         self.optimzer = modules["optimizer"]
+        
+        self.epoch = 0
+        self.step = 0
+        
+    @property
+    def epoch_length(self):
+        return len(self.dataset) // self.batch_size
     
     def loop(self) -> None:
-        data_loader = DataLoader(self.dataset, self.batch_size, shuffle=True)
-        self.network.train()
-        
+        self.before_loop()
         for epoch in range(self.epoch_duration):
-            for step, batch in enumerate(data_loader):
-                self.optimizer.zero_grad()
-                loss = self.model.compute_loss(self.network, batch)
-                loss.backward()
-                self.optimizer.step()
+            self.train_one_epoch()
+        self.after_loop()
         
-        self.optimizer.zero_grad()
+    def train_one_epoch(self):
+        self.before_epoch()
+        for step in range(self.epoch_length):
+            self.train_one_step()
+        self.after_epoch()
+    
+    def train_one_step(self):
+        self.before_step()
+        #* 对一个 batch 的计算
+        batch = next(self.data_iterator)
+        loss = self.model.compute_loss(self.network, batch)
+        loss.backward()
+        self.after_step()
+        
+    def before_loop(self):
+        self.data_iterator = iter(DataLoader(self.dataset, self.batch_size, shuffle=True, drop_last=True))
+        self.network.train()
+        pass
+        
+    def after_loop(self):
+        self.optimzer.zero_grad()
         self.network.eval()
+        pass
+        
+    def before_epoch(self):
+        pass 
+    
+    def after_epoch(self):
+        pass
+    
+    def before_step(self):
+        self.optimzer.zero_grad()
+        pass
+    
+    def after_step(self):
+        self.optimzer.step()
+        pass
