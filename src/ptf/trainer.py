@@ -41,7 +41,6 @@ class _BaseTrainer:
         self.after_step()
         
     def before_loop(self):
-        self.data_iterator = iter(DataLoader(self.dataset, self.batch_size, shuffle=True, drop_last=True))
         self.network.train()
         pass
         
@@ -51,6 +50,7 @@ class _BaseTrainer:
         pass
         
     def before_epoch(self):
+        self.data_iterator = iter(DataLoader(self.dataset, self.batch_size, shuffle=True, drop_last=True))
         pass 
     
     def after_epoch(self):
