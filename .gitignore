@@ -16,4 +16,4 @@ __pycache__/
 .vscode/
 .idea/
 
-develop/
+/develop
