@@ -64,11 +64,15 @@ class ReproduciblePlugin(_BasePlugin):
         # Fix random seed and generate next seed
         manual_seed(self.seed)
         random.seed(self.seed)
-        self.seed = random.randint(*self.seed_range)
+        
+    def before_loop(self):
+        # Fixing seed before loop helps with initializing weights
+        self.fix_seed()
         
     def before_epoch(self):
         # Before each epoch, fix the random seed and build a data iterator
         self.fix_seed()
+        self.seed = random.randint(*self.seed_range)
         self.trainer.data_iterator = iter(DataLoader(
             self.trainer.dataset, 
             self.trainer.batch_size, 
