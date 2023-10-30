@@ -1,7 +1,5 @@
 class _BasePlugin:
-    def __init__(self, trainer=None):
-        self.trainer = trainer
-        
+    trainer = None
     def before_loop(self):
         pass 
     
@@ -19,3 +17,17 @@ class _BasePlugin:
     
     def after_step(self):
         pass
+    
+    
+class WeightsUpdatePlugin(_BasePlugin):
+    
+    def after_loop(self):
+        self.trainer.optimzer.zero_grad()
+    
+    def before_step(self):
+        if self.trainer.local_step % self.trainer.gradient_accumulate == 1:
+            self.trainer.optimzer.zero_grad()
+    
+    def after_step(self):
+        if self.trainer.local_step % self.trainer.gradient_accumulate == 0:
+            self.trainer.optimzer.step()
