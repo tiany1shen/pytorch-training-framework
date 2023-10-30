@@ -3,8 +3,8 @@ from math import ceil
 from torch.utils.data import DataLoader
 from typing import Optional, Any, Sequence
 
-from model import _BaseModel
-from plugin import _BasePlugin, WeightsUpdatePlugin
+from .model import _BaseModel
+from .plugin import _BasePlugin, WeightsUpdatePlugin
 
 
 class _BaseTrainer:
@@ -69,27 +69,28 @@ class _BaseTrainer:
         self.after_step()
         
     def before_loop(self) -> None:
-        pass
+        for plugin in self.plugins:
+            plugin.before_loop()
         
     def after_loop(self) -> None:
-        self.optimzer.zero_grad()
-        pass
+        for plugin in self.plugins:
+            plugin.after_loop()
         
     def before_epoch(self) -> None:
-        pass 
+        for plugin in self.plugins:
+            plugin.before_epoch()
     
     def after_epoch(self) -> None:
-        pass
+        for plugin in self.plugins:
+            plugin.after_epoch()
     
     def before_step(self) -> None:
-        if self.local_step % self.gradient_accumulate == 1:
-            self.optimzer.zero_grad()
-        pass
+        for plugin in self.plugins:
+            plugin.before_step()
     
     def after_step(self) -> None:
-        if self.local_step % self.gradient_accumulate == 0:
-            self.optimzer.step()
-        pass
+        for plugin in self.plugins:
+            plugin.after_step()
     
     def _get_next_batch(self) -> torch.Tensor | dict[str, torch.Tensor] | Sequence[torch.Tensor]:
         if not hasattr(self, "data_iterator"):
@@ -138,5 +139,4 @@ class Trainer(_BaseTrainer):
         
         super().__init__(hparams, modules)
         
-        weight_updater = WeightsUpdatePlugin()
-        self.add_plugin(weight_updater)
+        self.add_plugin(WeightsUpdatePlugin())
