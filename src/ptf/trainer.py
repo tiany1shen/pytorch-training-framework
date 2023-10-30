@@ -92,14 +92,17 @@ class _BaseTrainer:
         for plugin in self.plugins:
             plugin.after_step()
     
-    def _get_next_batch(self) -> torch.Tensor | dict[str, torch.Tensor] | Sequence[torch.Tensor]:
-        if not hasattr(self, "data_iterator"):
-            self.data_iterator = iter(DataLoader(self.dataset, self.batch_size, shuffle=True, drop_last=True))
-
+    def _get_next_batch(
+        self
+    ) -> torch.Tensor | dict[str, torch.Tensor] | Sequence[torch.Tensor]:
         try:
             batch = next(self.data_iterator)
-        except StopIteration:
-            self.data_iterator = iter(DataLoader(self.dataset, self.batch_size, shuffle=True, drop_last=True))
+        except (StopIteration, AttributeError):
+            self.data_iterator = iter(DataLoader(
+                self.dataset, 
+                self.batch_size, 
+                shuffle=True, drop_last=True
+            ))
             batch = next(self.data_iterator)
         return batch
     
@@ -134,7 +137,8 @@ class Trainer(_BaseTrainer):
         hparams = dict(
             epoch_num = epoch_num,
             batch_size = batch_size,
-            gradient_accumulate = 1 if gradient_accumulate is None else gradient_accumulate
+            gradient_accumulate = (
+                1 if gradient_accumulate is None else gradient_accumulate)
         )
         
         super().__init__(hparams, modules)
