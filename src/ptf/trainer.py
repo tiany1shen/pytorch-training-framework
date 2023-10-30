@@ -1,17 +1,37 @@
 import torch
+import random
 from math import ceil
 from torch.utils.data import DataLoader
 from typing import Optional, Any, Sequence
 
 from .model import _BaseModel
-from .plugin import _BasePlugin, WeightsUpdatePlugin
+from .plugin import (
+    _BasePlugin, 
+    WeightsUpdatePlugin, 
+    ReproduciblePlugin
+)
 
 
 class _BaseTrainer:
     r"""
+    Base class for all trainers. Only basic functionals are implemented in this class: 
+        1. batch training loop 
+        2. update the parameters according to gradients every several batches. 
     
+    Args:
+        hparams (dict): Hyper-parameters controls the training procedure, including:
+            - `epoch_num` (int): number of epoch in this training procedure
+            - `batch-size` (int): number of data for every batch
+            - `gradient_accumulate` (int): number of batch in one update step
+        modules (dict): Modules interact with this trainer, including:
+            - `dataset (torch.utils.data.Dataset)`: dataset from which to load the data
+            - `network` (torch.nn.Module): neural network to be trained
+            - `model` (model._BaseModel): model to make use of the neural network
+            - `optimizer` (torch.optim.Optimizer): optimizer to update neural network weights
     """
-    def __init__(self, hparams: dict[str, int], modules: dict[str, Any]) -> None:
+    def __init__(
+        self, hparams: dict[str, int], modules: dict[str, Any]
+    ) -> None:
         self.hparams = hparams
         self.epoch_num = hparams["epoch_num"]
         self.batch_size = hparams["batch_size"]
@@ -31,8 +51,8 @@ class _BaseTrainer:
         
     @property
     def epoch_length(self) -> int:
-        accumulated_batch_size = self.batch_size * self.gradient_accumulate
-        return ceil(len(self.dataset) / accumulated_batch_size)
+        loader_length = len(self.dataset) // self.batch_size
+        return ceil(loader_length / self.gradient_accumulate)
     
     @property
     def epoch(self) -> int:
@@ -110,7 +130,7 @@ class _BaseTrainer:
         plugin.trainer = self
         self.plugins.append(plugin)
         
-    def add_pulgins(self, plugins: list[_BasePlugin]):
+    def add_plugins(self, plugins: list[_BasePlugin]):
         for plugin in plugins:
             self.add_plugin(plugin)
 
@@ -126,6 +146,7 @@ class Trainer(_BaseTrainer):
         epoch_num:  int,
         batch_size: int,
         gradient_accumulate: Optional[int] = None,
+        seed: Optional[int] = None
     ) -> None:
         modules = dict(
             dataset = dataset,
@@ -143,4 +164,10 @@ class Trainer(_BaseTrainer):
         
         super().__init__(hparams, modules)
         
-        self.add_plugin(WeightsUpdatePlugin())
+        self.seed = random.randint(-2**63, 2**64-1) if seed is None else seed
+        
+        plugins = [
+            WeightsUpdatePlugin(self.gradient_accumulate),
+            ReproduciblePlugin(self.seed)
+        ]
+        self.add_plugins(plugins)
