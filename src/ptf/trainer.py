@@ -8,7 +8,8 @@ from .model import _BaseModel
 from .plugin import (
     _BasePlugin, 
     WeightsUpdatePlugin, 
-    ReproduciblePlugin
+    ReproduciblePlugin,
+    CheckpointPlugin
 )
 
 
@@ -36,12 +37,13 @@ class _BaseTrainer:
         self.epoch_num = hparams["epoch_num"]
         self.batch_size = hparams["batch_size"]
         self.gradient_accumulate = hparams["gradient_accumulate"]
+        self.seed = hparams["seed"]
         
         self.modelus = modules
         self.dataset = modules["dataset"]
         self.network = modules["network"]
         self.model = modules["model"]
-        self.optimzer = modules["optimizer"]
+        self.optimizer = modules["optimizer"]
         
         self.start_epoch = 0
         self.local_epoch = 0
@@ -126,13 +128,14 @@ class _BaseTrainer:
             batch = next(self.data_iterator)
         return batch
     
-    def add_plugin(self, plugin: _BasePlugin):
+    def add_plugin(self, plugin: _BasePlugin, show_debug_info=False):
         plugin.trainer = self
+        if show_debug_info: plugin.debug = True
         self.plugins.append(plugin)
         
-    def add_plugins(self, plugins: list[_BasePlugin]):
+    def add_plugins(self, plugins: list[_BasePlugin], show_debug_info=False):
         for plugin in plugins:
-            self.add_plugin(plugin)
+            self.add_plugin(plugin, show_debug_info)
 
 
 class Trainer(_BaseTrainer):
@@ -145,8 +148,10 @@ class Trainer(_BaseTrainer):
         
         epoch_num:  int,
         batch_size: int,
-        gradient_accumulate: Optional[int] = None,
-        seed: Optional[int] = None
+        gradient_accumulate: int = 1,
+        seed: Optional[int] = None,
+        
+        show_debug_info = False
     ) -> None:
         modules = dict(
             dataset = dataset,
@@ -158,16 +163,14 @@ class Trainer(_BaseTrainer):
         hparams = dict(
             epoch_num = epoch_num,
             batch_size = batch_size,
-            gradient_accumulate = (
-                1 if gradient_accumulate is None else gradient_accumulate)
+            gradient_accumulate = gradient_accumulate,
+            seed=seed
         )
         
         super().__init__(hparams, modules)
         
-        self.seed = random.randint(-2**63, 2**64-1) if seed is None else seed
-        
         plugins = [
-            WeightsUpdatePlugin(self.gradient_accumulate),
-            ReproduciblePlugin(self.seed)
+            ReproduciblePlugin(),
+            WeightsUpdatePlugin()
         ]
-        self.add_plugins(plugins)
+        self.add_plugins(plugins, show_debug_info)
