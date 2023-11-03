@@ -9,7 +9,7 @@ from .plugin import (
     _BasePlugin, 
     WeightsUpdatePlugin, 
     ReproduciblePlugin,
-    CheckpointPlugin
+    ProgressBarPlugin
 )
 
 
@@ -128,14 +128,14 @@ class _BaseTrainer:
             batch = next(self.data_iterator)
         return batch
     
-    def add_plugin(self, plugin: _BasePlugin, show_debug_info=False):
+    def add_plugin(self, plugin: _BasePlugin):
         plugin.trainer = self
-        if show_debug_info: plugin.debug = True
+        if hasattr(self, "debug_mode") and self.debug_mode: plugin.debug = True
         self.plugins.append(plugin)
         
-    def add_plugins(self, plugins: list[_BasePlugin], show_debug_info=False):
+    def add_plugins(self, plugins: list[_BasePlugin]):
         for plugin in plugins:
-            self.add_plugin(plugin, show_debug_info)
+            self.add_plugin(plugin)
 
 
 class Trainer(_BaseTrainer):
@@ -170,7 +170,9 @@ class Trainer(_BaseTrainer):
         super().__init__(hparams, modules)
         
         plugins = [
+            ProgressBarPlugin(),
             ReproduciblePlugin(),
             WeightsUpdatePlugin()
         ]
-        self.add_plugins(plugins, show_debug_info)
+        self.debug_mode = show_debug_info
+        self.add_plugins(plugins)

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 
 class _BasePlugin:
@@ -22,7 +22,40 @@ class _BasePlugin:
     def after_step(self):
         pass
     
+    def debug_header(self, scope: str):
+        assert scope in ["before-loop", "in-epoch", "in-step", "after-loop"]
+        if scope == "before-loop":
+            return "Before Loop"
+        if scope == "after-loop":
+            return "After Loop"
+        if scope == "in-epoch":
+            max_epoch = self.trainer.start_epoch + self.trainer.epoch_num 
+            epoch_str = (
+                " " * (len(str(max_epoch)) - len(str(self.trainer.epoch)))
+                + str(self.trainer.epoch)
+            )
+            return f"Epoch: {epoch_str}"
+        if scope == "in-step":
+            max_epoch = self.trainer.start_epoch + self.trainer.epoch_num 
+            epoch_str = (
+                " " * (len(str(max_epoch)) - len(str(self.trainer.epoch)))
+                + str(self.trainer.epoch)
+            )
+            max_step = self.trainer.epoch_length * max_epoch
+            step_str = (
+                " " * (len(str(max_step)) - len(str(self.trainer.step)))
+                + str(self.trainer.step)
+            )
+            return f"Epoch: {epoch_str} | Step: {step_str}"
     
+    def show_debug_infos(self, scope: str, infos: str | List[str]):
+        if not self.debug: return 
+        if isinstance(infos, str):
+            infos = [infos]
+        for info in infos:
+            print(f"[{self.debug_header(scope)}] {info}")
+
+
 class WeightsUpdatePlugin(_BasePlugin):
     r"""
     A basic plugin used in almost every training loop. It updates parameters registered in the optimizer object.
@@ -47,22 +80,19 @@ class WeightsUpdatePlugin(_BasePlugin):
     def before_loop(self):
         self.trainer.model.init_weights(self.trainer.network)
         self.trainer.optimizer.zero_grad()
+        self.show_debug_infos("before-loop", "Reset network weights.")
         
     def after_loop(self):
         # Zero out gradients after training procedure finished.
         self.trainer.optimizer.zero_grad()
     
     def after_step(self):
-        # Update the parameters according to the gradients attached to them after each optimizing step.
         if not self.update_gradient: return
+        self.show_debug_infos("in-step", "Update network weights.")
         
+        # Update the parameters according to the gradients attached to them after each optimizing step.
         self.trainer.optimizer.step()
         self.trainer.optimizer.zero_grad()
-        if self.debug:
-            print(
-                f"[Epoch: {self.trainer.epoch}\tStep: {self.trainer.step}] "
-                "Update network weights."
-            )
 
 
 import random
@@ -93,42 +123,33 @@ class ReproduciblePlugin(_BasePlugin):
         
     def before_loop(self):
         if self.shutdown: return
+        self.show_debug_infos("before-loop", f"Fix random seed {self.seed}.")
+        
         # Fixing seed before loop helps with initializing weights
         self.fix_seed()
-        if self.debug:
-            print(
-                f"[Before Loop] Fix random seed {self.seed}"
-            )
-        
         
     def before_epoch(self):
         if self.shutdown: return
+        self.show_debug_infos("in-epoch", [
+            f"Fix random seed {self.seed}.",
+            "Reset data iterator."
+        ])
+        
         # Before each epoch, fix the random seed and build a data iterator
         self.fix_seed()
         self.next_seed = random.randint(*self.seed_range)
-        if self.debug:
-            print(
-                f"[Epoch: {self.trainer.epoch}] Fix random seed {self.seed}."
-            )
-        
         self.trainer.data_iterator = iter(DataLoader(
             self.trainer.dataset, 
             self.trainer.batch_size, 
             shuffle=True, drop_last=True
         ))
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Reset data iterator.")
         
     def after_epoch(self):
         if self.shutdown: return
+        self.show_debug_infos("in-epoch", f"Update random seed {self.next_seed}.")
         # update trainer random seed
         self.trainer.seed = self.next_seed
         self.next_seed = None
-        if self.debug:
-            print(
-                f"[Epoch: {self.trainer.epoch}\tStep: {self.trainer.step}] "
-                "Update random seed."
-            )
 
 
 from pathlib import Path 
@@ -160,49 +181,38 @@ class CheckpointPlugin(_BasePlugin):
     
     def before_loop(self):
         if not self.load_checkpoint: return
+        self.show_debug_infos("before-loop", f"Load checkpoint from {self.checkpoint_path}")
         
         network_file = self.checkpoint_path / "network.pth"
         if network_file.exists():
             network_state_dict = torch_load(network_file)
             self.trainer.network.load_state_dict(network_state_dict)
-            if self.debug:
-                print(f"[Before Loop] Loading network from {network_file}.")
             
         optimizer_file = self.checkpoint_path / "optimizer.pth"
         if optimizer_file.exists():
             optimizer_state_dict = torch_load(optimizer_file)
             self.trainer.optimizer.load_state_dict(optimizer_state_dict)
-            if self.debug:
-                print(f"[Before Loop] Loading optimizer from {optimizer_file}.")
             
         trainer_file = self.checkpoint_path / "trainer.pth"
         if trainer_file.exists():
             trainer_state_dict = torch_load(trainer_file)
             self.trainer.seed = trainer_state_dict["seed"]
             self.trainer.start_epoch = trainer_state_dict["epoch"]
-            if self.debug:
-                print(f"[Before Loop] Loading trainer random seed {self.trainer.seed}")
-                print(f"[Before Loop] Loaded Checkpoint saved at epoch {self.trainer.epoch}")
-    
+        
     def after_epoch(self):
         if not self.save_checkpoint: return
         saving_path = self.saving_dir / f"epoch-{self.trainer.epoch}"
         saving_path.mkdir(parents=True, exist_ok=True)
+        self.show_debug_infos("in-epoch", f"Save checkpoint to {saving_path}")
         
         torch_save(
             self.trainer.network.state_dict(), saving_path / "network.pth")
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Saving network to {saving_path}")
         torch_save(
             self.trainer.optimizer.state_dict(), saving_path / "optimizer.pth")
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Saving optimizer to {saving_path}")
         trainer_state_dict = {"epoch": self.trainer.epoch}
         if self.trainer.seed is not None:
             trainer_state_dict["seed"] = self.trainer.seed
         torch_save(trainer_state_dict, saving_path / "trainer.pth")
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Saving trainer state to {saving_path}")
 
 class EvaluatePlugin(_BasePlugin):
     show_result_format = {
@@ -216,26 +226,49 @@ class EvaluatePlugin(_BasePlugin):
     
     @property
     def evaluate(self):
-        return self.trainer.epoch % self.evaluate_period == 0
+        return self.trainer.epoch % self.evaluate_period == 0 and \
+            hasattr(self.trainer.model, "evaluate")
     
     def after_epoch(self):
-        if not hasattr(self.trainer.model, "evaluate") or not self.evaluate: return 
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Evaluating on validation dataset.")
+        if not self.evaluate: return 
+        self.show_debug_infos("in-epoch", "Evaluate on validate dataset.")
+        
         eval_metrics = self.trainer.model.evaluate(self.trainer.network, self.dataset)
-        if self.debug:
-            print(f"[Epoch: {self.trainer.epoch}] Evaluating results:")
-            for k, v in eval_metrics.items():
-                if k in self.show_result_format:
-                    print(f"[Epoch: {self.trainer.epoch}] \t{k}:\t{self.show_result_format[k](v)}")
-                else:
-                    print(f"[Epoch: {self.trainer.epoch}] \t{k}:\t{self.show_result_format['others'](v)}")
+        self.show_debug_infos("in-epoch", (
+            f"\t{k}:\t{self.show_result_format[k if k in self.show_result_format else 'others'](v)}"
+            for k, v in eval_metrics.items()
+        ))
+    
+class ProgressBarPlugin(_BasePlugin):
+    def progress_bar(self, curr, total):
+        progress = curr * 10 // total
+        bar = "|" + ">" * progress + "-" * (10 - progress) + "|"
+        rate = " " * (len(str(total)) - len(str(curr))) + str(curr)
+        return bar + f"( {rate} / {total})"
+    
+    def plot_progress_bar(self):
+        bar = "\rProgressing: "
+        
+        current_epoch= self.trainer.epoch
+        total_epoch = self.trainer.start_epoch + self.trainer.epoch_num
+        epoch_rate = f"{current_epoch / total_epoch:.1%}"
+        bar += f"[Total Epoch {epoch_rate:>6}]"
+        bar += self.progress_bar(current_epoch, total_epoch)
+        
+        bar += " | "
+        current_local_step = self.trainer.local_step - (self.trainer.local_epoch - 1) * self.trainer.epoch_length
+        total_local_step = self.trainer.epoch_length
+        local_step_rate = f"{current_local_step / total_local_step:.1%}"
+        bar += f"[Local Step {local_step_rate:>6}]"
+        bar += self.progress_bar(current_local_step, total_local_step)
+        
+        print(bar, end=" ", flush=True)
+    
+    def before_step(self):
+        if self.debug: return
+        self.plot_progress_bar()
+        
 
 # class TensorboardLoggingPlugin(_BasePlugin):
 #     #todo: implement tensorboard plugin
 #     raise NotImplementedError
-
-# class ProgressBarPlugin(_BasePlugin):
-#     #todo: implement progress bar plugin
-#     raise NotImplementedError
-    
