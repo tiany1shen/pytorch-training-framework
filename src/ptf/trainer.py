@@ -11,6 +11,8 @@ from .plugin import (
     ReproduciblePlugin,
     ProgressBarPlugin
 )
+from .utils.typing_hints import Batch
+from .utils.trackers import _BaseTracker, LossTracker
 
 
 class _BaseTrainer:
@@ -48,8 +50,10 @@ class _BaseTrainer:
         self.start_epoch = 0
         self.local_epoch = 0
         self.local_step = 0
+        self.total_loss = 0
         
         self.plugins = []
+        self.loss_trackers = {}
         
     @property
     def epoch_length(self) -> int:
@@ -85,11 +89,26 @@ class _BaseTrainer:
         
         # 对一个 batch 的计算
         batch = self._get_next_batch()
-        loss = self.model.compute_loss(self.network, batch)
-        loss.backward()
+        loss_dict = self.model.compute_losses(self.network, batch)
+        for loss_name, loss_tensor in loss_dict.items():
+            self.loss_trackers[loss_name].add(loss_tensor.item())
+        total_loss = self.model.summary_losses(loss_dict)
+        total_loss.backward()
         
         self.after_step()
-        
+    
+    def _get_next_batch(self) -> Batch:
+        try:
+            batch = next(self.data_iterator)
+        except (StopIteration, AttributeError):
+            self.data_iterator = iter(DataLoader(
+                self.dataset, 
+                self.batch_size, 
+                shuffle=True, drop_last=True
+            ))
+            batch = next(self.data_iterator)
+        return batch
+    
     def before_loop(self) -> None:
         for plugin in self.plugins:
             plugin.before_loop()
@@ -114,28 +133,17 @@ class _BaseTrainer:
         for plugin in self.plugins:
             plugin.after_step()
     
-    def _get_next_batch(
-        self
-    ) -> torch.Tensor | dict[str, torch.Tensor] | Sequence[torch.Tensor]:
-        try:
-            batch = next(self.data_iterator)
-        except (StopIteration, AttributeError):
-            self.data_iterator = iter(DataLoader(
-                self.dataset, 
-                self.batch_size, 
-                shuffle=True, drop_last=True
-            ))
-            batch = next(self.data_iterator)
-        return batch
-    
-    def add_plugin(self, plugin: _BasePlugin):
+    def add_plugin(self, plugin: _BasePlugin) -> None:
         plugin.trainer = self
         if hasattr(self, "debug_mode") and self.debug_mode: plugin.debug = True
         self.plugins.append(plugin)
         
-    def add_plugins(self, plugins: list[_BasePlugin]):
+    def add_plugins(self, plugins: list[_BasePlugin]) -> None:
         for plugin in plugins:
             self.add_plugin(plugin)
+    
+    def add_loss_tracker(self, name: str, tracker: _BaseTracker) -> None:
+        self.loss_trackers[name] = tracker
 
 
 class Trainer(_BaseTrainer):
@@ -176,3 +184,6 @@ class Trainer(_BaseTrainer):
         ]
         self.debug_mode = show_debug_info
         self.add_plugins(plugins)
+        
+        for loss_name in self.model.loss_weights:
+            self.add_loss_tracker(loss_name, LossTracker())
