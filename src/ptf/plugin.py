@@ -276,7 +276,9 @@ class ProgressBarPlugin(_BasePlugin):
     def before_step(self):
         if self.debug: return
         self.plot_progress_bar()
-        
+
+
+from torch.utils.tensorboard import SummaryWriter
 
 class TensorboardLoggingPlugin(_BasePlugin):
     show_result_format = {
@@ -284,7 +286,8 @@ class TensorboardLoggingPlugin(_BasePlugin):
         "others": lambda x: f"{x:.3f}"
     }
     
-    def __init__(self, loss_period: int, epoch_period: int) -> None:
+    def __init__(self, log_dir: str, loss_period: int, epoch_period: int) -> None:
+        self.writer = SummaryWriter(log_dir)
         self.loss_period = loss_period
         self.epoch_period = epoch_period
     
@@ -306,9 +309,8 @@ class TensorboardLoggingPlugin(_BasePlugin):
     def logging_metric(self):
         return self.trainer.epoch % self.epoch_period == 0 and self.metiric_trackers
     
-    def add_scalar(self, name, value, step):
-        # print(f"loss/{name}: {value:.4f}")
-        pass
+    def add_scalar(self, tag, value, step):
+        self.writer.add_scalar(tag, value, step)
     
     def after_step(self):
         if not self.logging_loss: return
