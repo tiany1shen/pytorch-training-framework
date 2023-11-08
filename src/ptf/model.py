@@ -5,11 +5,14 @@ from .utils.typing_hints import ScalarTensor, Batch
 
 
 #* Type Alias
+Dataset: TypeAlias = torch.utils.data.Dataset
 Network: TypeAlias = torch.nn.Module
 LossDict: TypeAlias = dict[str, ScalarTensor]
+MetricDict: TypeAlias = dict[str, float]
 
 class _BaseModel:
     loss_weights: dict[str, float] = {}
+    evaluate_metrics: list[str] = []
     
     def compute_losses(self, network: Network, batch: Batch) -> LossDict:
         raise NotImplementedError
@@ -22,3 +25,6 @@ class _BaseModel:
     
     def init_weights(self, network):
         raise NotImplementedError
+    
+    def evaluate(self, network: Network, dataset: Dataset) -> MetricDict:
+        return {}

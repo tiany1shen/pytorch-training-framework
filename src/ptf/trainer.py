@@ -12,7 +12,7 @@ from .plugin import (
     ProgressBarPlugin
 )
 from .utils.typing_hints import Batch
-from .utils.trackers import _BaseTracker, LossTracker
+from .utils.trackers import _BaseTracker, LossTracker, SimpleTracker
 
 
 class _BaseTrainer:
@@ -92,8 +92,19 @@ class _BaseTrainer:
         loss_dict = self.model.compute_losses(self.network, batch)
         for loss_name, loss_tensor in loss_dict.items():
             self.loss_trackers[loss_name].add(loss_tensor.item())
-        total_loss = self.model.summary_losses(loss_dict)
+        total_loss = self.model.summary_losses(loss_dict) / self.gradient_accumulate
         total_loss.backward()
+        
+        # #! DEBUG
+        # print()
+        # print("optimizer params:")
+        # print("weight\t", self.optimizer.param_groups[0]["params"][0].data[0,0,0,:3].tolist())
+        # print("grad\t", self.optimizer.param_groups[0]["params"][0].grad.data[0,0,0,:3].tolist())
+        # print()
+        # print("network params:")
+        # print("weight\t", self.network.net.conv1.weight.data[0,0,0,:3].tolist())
+        # print("grad\t", self.network.net.conv1.weight.grad.data[0,0,0,:3].tolist())
+        # print()
         
         self.after_step()
     
@@ -147,6 +158,9 @@ class _BaseTrainer:
 
 
 class Trainer(_BaseTrainer):
+    loss_tracker_type = LossTracker
+    metric_tracker_type = SimpleTracker
+    
     def __init__(
         self,
         dataset:    torch.utils.data.Dataset,
@@ -180,10 +194,10 @@ class Trainer(_BaseTrainer):
         plugins = [
             ProgressBarPlugin(),
             ReproduciblePlugin(),
-            WeightsUpdatePlugin()
+            WeightsUpdatePlugin(update_period=gradient_accumulate)
         ]
         self.debug_mode = show_debug_info
         self.add_plugins(plugins)
         
         for loss_name in self.model.loss_weights:
-            self.add_loss_tracker(loss_name, LossTracker())
+            self.add_loss_tracker(loss_name, self.loss_tracker_type())

@@ -229,20 +229,29 @@ class EvaluatePlugin(_BasePlugin):
         return self.trainer.epoch % self.evaluate_period == 0 and \
             hasattr(self.trainer.model, "evaluate")
     
+    def before_loop(self):
+        if self.trainer.model.evaluate_metrics:
+            metric_trackers = {}
+            for metric_name in self.trainer.model.evaluate_metrics:
+                metric_trackers[metric_name] = self.trainer.metric_tracker_type()
+            self.trainer.metric_trackers = metric_trackers
+    
     def after_epoch(self):
         if not self.evaluate: return 
         self.show_debug_infos("in-epoch", "Evaluate on validate dataset.")
         
-        eval_metrics = self.trainer.model.evaluate(self.trainer.network, self.dataset)
+        eval_metrics_dict = self.trainer.model.evaluate(self.trainer.network, self.dataset)
+        for metric_name, metric_value in eval_metrics_dict.items():
+            self.trainer.metric_trackers[metric_name].add(metric_value)
         self.show_debug_infos("in-epoch", (
             f"\t{k}:\t{self.show_result_format[k if k in self.show_result_format else 'others'](v)}"
-            for k, v in eval_metrics.items()
+            for k, v in eval_metrics_dict.items()
         ))
     
-class ProgressBarPlugin(_BasePlugin):
+class ProgressBarPlugin(_BasePlugin): 
     def progress_bar(self, curr, total):
         progress = curr * 10 // total
-        bar = "|" + ">" * progress + "-" * (10 - progress) + "|"
+        bar = "|" + ">" * progress + "=" * (10 - progress) + "|"
         rate = " " * (len(str(total)) - len(str(curr))) + str(curr)
         return bar + f"( {rate} / {total})"
     
@@ -256,8 +265,8 @@ class ProgressBarPlugin(_BasePlugin):
         bar += self.progress_bar(current_epoch, total_epoch)
         
         bar += " | "
-        current_local_step = self.trainer.local_step - (self.trainer.local_epoch - 1) * self.trainer.epoch_length
-        total_local_step = self.trainer.epoch_length
+        total_local_step = self.trainer.epoch_length * self.trainer.gradient_accumulate
+        current_local_step = self.trainer.local_step - (self.trainer.local_epoch - 1) * total_local_step
         local_step_rate = f"{current_local_step / total_local_step:.1%}"
         bar += f"[Local Step {local_step_rate:>6}]"
         bar += self.progress_bar(current_local_step, total_local_step)
@@ -269,6 +278,52 @@ class ProgressBarPlugin(_BasePlugin):
         self.plot_progress_bar()
         
 
-# class TensorboardLoggingPlugin(_BasePlugin):
-#     #todo: implement tensorboard plugin
-#     raise NotImplementedError
+class TensorboardLoggingPlugin(_BasePlugin):
+    show_result_format = {
+        "correctness": lambda x: f"{x:.1%}",
+        "others": lambda x: f"{x:.3f}"
+    }
+    
+    def __init__(self, loss_period: int, epoch_period: int) -> None:
+        self.loss_period = loss_period
+        self.epoch_period = epoch_period
+    
+    @property
+    def loss_trackers(self): return self.trainer.loss_trackers 
+    
+    @property 
+    def metiric_trackers(self):
+        if hasattr(self.trainer, "metric_trackers"):
+            return self.trainer.metric_trackers
+        else:
+            return None
+    
+    @property
+    def logging_loss(self):
+        return self.trainer.step % self.loss_period == 0
+    
+    @property
+    def logging_metric(self):
+        return self.trainer.epoch % self.epoch_period == 0 and self.metiric_trackers
+    
+    def add_scalar(self, name, value, step):
+        # print(f"loss/{name}: {value:.4f}")
+        pass
+    
+    def after_step(self):
+        if not self.logging_loss: return
+        for loss_name, tracker in self.loss_trackers.items():
+            loss_value = tracker.report()
+            self.add_scalar(f"loss/{loss_name}", loss_value, self.trainer.step)
+            self.show_debug_infos("in-step", f"Logging loss/{loss_name}: {loss_value:.4f}")
+    
+    def after_epoch(self):
+        if not self.logging_metric: return 
+        for metric_name, tracker in self.metiric_trackers.items():
+            metric_value = tracker.report()
+            self.add_scalar(f"metric/{metric_name}", metric_value, self.trainer.epoch)
+            self.show_debug_infos(
+                "in-epoch", 
+                f"Logging metric/{metric_name}: {self.show_result_format[metric_name](metric_value)}"
+            )
+
