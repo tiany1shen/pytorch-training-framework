@@ -185,17 +185,17 @@ class CheckpointPlugin(_BasePlugin):
         
         network_file = self.checkpoint_path / "network.pth"
         if network_file.exists():
-            network_state_dict = torch_load(network_file)
+            network_state_dict = torch_load(network_file, map_location="cpu")
             self.trainer.network.load_state_dict(network_state_dict)
             
         optimizer_file = self.checkpoint_path / "optimizer.pth"
         if optimizer_file.exists():
-            optimizer_state_dict = torch_load(optimizer_file)
+            optimizer_state_dict = torch_load(optimizer_file, map_location="cpu")
             self.trainer.optimizer.load_state_dict(optimizer_state_dict)
             
         trainer_file = self.checkpoint_path / "trainer.pth"
         if trainer_file.exists():
-            trainer_state_dict = torch_load(trainer_file)
+            trainer_state_dict = torch_load(trainer_file, map_location="cpu")
             self.trainer.seed = trainer_state_dict["seed"]
             self.trainer.start_epoch = trainer_state_dict["epoch"]
         

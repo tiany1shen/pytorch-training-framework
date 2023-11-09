@@ -190,3 +190,11 @@ class Trainer(_BaseTrainer):
         
         for loss_name in self.model.loss_weights:
             self.add_loss_tracker(loss_name, self.loss_tracker_type())
+
+
+#todo: use `Accelerate` package to control GPU/multi-GPU training
+class AccelerateTrainer(_BaseTrainer):
+    r"""
+    
+    """
+    pass
