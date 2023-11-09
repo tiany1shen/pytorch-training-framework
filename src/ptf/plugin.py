@@ -312,6 +312,9 @@ class TensorboardLoggingPlugin(_BasePlugin):
     def add_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
     
+    def before_loop(self):
+        Path(self.writer.log_dir).mkdir(exist_ok=True, parents=True)
+    
     def after_step(self):
         if not self.logging_loss: return
         for loss_name, tracker in self.loss_trackers.items():

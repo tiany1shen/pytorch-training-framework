@@ -95,17 +95,6 @@ class _BaseTrainer:
         total_loss = self.model.summary_losses(loss_dict) / self.gradient_accumulate
         total_loss.backward()
         
-        # #! DEBUG
-        # print()
-        # print("optimizer params:")
-        # print("weight\t", self.optimizer.param_groups[0]["params"][0].data[0,0,0,:3].tolist())
-        # print("grad\t", self.optimizer.param_groups[0]["params"][0].grad.data[0,0,0,:3].tolist())
-        # print()
-        # print("network params:")
-        # print("weight\t", self.network.net.conv1.weight.data[0,0,0,:3].tolist())
-        # print("grad\t", self.network.net.conv1.weight.grad.data[0,0,0,:3].tolist())
-        # print()
-        
         self.after_step()
     
     def _get_next_batch(self) -> Batch:
