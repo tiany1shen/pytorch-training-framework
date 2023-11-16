@@ -1,7 +1,14 @@
+from __future__ import annotations
 import torch
-from typing import TypeAlias, TypedDict
-from collections.abc import Sequence, Mapping
+from typing import TypeAlias, TypedDict, Sequence, Mapping, TYPE_CHECKING
 
+
+if TYPE_CHECKING:
+    from .modules import SizedDataset, NeuralNetwork
+
+__all__ = [
+    "ScalarTensor", "Batch", "DeviceType", "TrainerStateDict", "TrainModuleDict"
+]
 
 r"""
 #* Tensor Types
@@ -24,18 +31,15 @@ Three typical types of batch are legitimate in this framework:
 """
 ScalarTensor: TypeAlias = torch.Tensor
 BatchedTensor: TypeAlias = torch.Tensor
-Batch: TypeAlias = BatchedTensor | Sequence[BatchedTensor] | Mapping[BatchedTensor]
+Batch: TypeAlias = BatchedTensor | Sequence[BatchedTensor] | Mapping[str, BatchedTensor]
 
+DeviceType: TypeAlias = torch.device | int | str
 
-#* Metric State Types
+class TrainerStateDict(TypedDict):
+    seed: int
+    epoch: int
 
-MetricCache: TypeAlias = float | Sequence[float] | None
-
-class MetricStateDict(TypedDict):
-    r"""
-    metric tracker state dictionary type. 
-    :key cache (float, list[float]): metric value tracked during training 
-    :key count (int): the counting of all data received
-    """
-    cache: MetricCache
-    count: int
+class TrainModuleDict(TypedDict):
+    dataset: SizedDataset
+    network: NeuralNetwork
+    optimizer: torch.optim.Optimizer
