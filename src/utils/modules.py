@@ -9,11 +9,11 @@ from torch.optim import Optimizer
 from pathlib import Path
 
 from .functionals import move_batch
-from .plugins import Plugin
+from .plugins import Plugin, check_plugin
 
 from typing import cast, Callable, Literal, Iterable
 from typing_extensions import Self, override
-from .typing_hints import Batch, ScalarTensor, DeviceType, TrainerStateDict, TrainModuleDict
+from .typing_hints import Data, Batch, ScalarTensor, DeviceType, TrainerStateDict, TrainModuleDict
 
 __all__ = [
     "SizedDataset", "NeuralNetwork", "TrainModel", "EvaluateModel",
@@ -30,7 +30,10 @@ class SizedDataset(Dataset):
     
     `torch.utils.data.Dataset` class with a `__len__` method.
     """
-    def __len__(self):
+    def __getitem__(self, index: int) -> Data:
+        raise NotImplementedError
+    
+    def __len__(self) -> int:
         raise NotImplementedError
 
 
@@ -52,7 +55,7 @@ class NeuralNetwork(Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
     
-    def init_weights(self):
+    def init_weights(self) -> Self:
         raise NotImplementedError
     
 
@@ -112,7 +115,7 @@ class EvaluateModel(_Model):
     def metrics(self) -> list[str]:
         return getattr(self, "_metrics")
     
-    def evaluate(self, network: NeuralNetwork):
+    def evaluate(self, network: NeuralNetwork) -> dict[str, float]:
         raise NotImplementedError
 
 
@@ -141,7 +144,9 @@ class _Tracker:
         self.cache = []
         return self 
     
-    def get_value(self, smooth_fn: Callable[[list[float]], float] = lambda x: x[-1]) -> float:
+    def get_value(
+        self, smooth_fn: Callable[[list[float]], float] = lambda x: x[-1]
+    ) -> float:
         if self.is_empty:
             raise IndexError(f"Try to access values from an empty tracker: {self.name}")
         return smooth_fn(self.cache)
@@ -380,5 +385,6 @@ class Trainer:
 
     def add_plugin(self, plugin: Plugin) -> Self:
         plugin.trainer = self
+        check_plugin(plugin)
         self.plugins.append(plugin)
         return self

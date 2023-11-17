@@ -19,6 +19,15 @@ __all__ = [
 ]
 
 
+def check_plugin(plugin: Plugin) -> None:
+    if isinstance(plugin, LoadCheckpointPlugin):
+        if len(plugin.trainer.plugins) > 0:
+            raise Exception(
+                "'LoadCheckpointPlugin' typed plugin should be registered first, " 
+                f"but got {len(plugin.trainer.plugins)} plugin(s) already registered."
+            )
+
+
 class Plugin:
     r""" Base class for all plugins.
     

@@ -31,6 +31,7 @@ Three typical types of batch are legitimate in this framework:
 """
 ScalarTensor: TypeAlias = torch.Tensor
 BatchedTensor: TypeAlias = torch.Tensor
+Data: TypeAlias = torch.Tensor | Sequence[torch.Tensor] | Mapping[str, torch.Tensor]
 Batch: TypeAlias = BatchedTensor | Sequence[BatchedTensor] | Mapping[str, BatchedTensor]
 
 DeviceType: TypeAlias = torch.device | int | str
