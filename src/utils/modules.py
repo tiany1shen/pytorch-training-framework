@@ -245,6 +245,10 @@ class Trainer:
         return hasattr(self, "_num_epochs")
     
     @property
+    def start_epoch(self) -> int:
+        return self._start_epoch_index
+    
+    @property
     def epoch(self) -> int:
         return self._start_epoch_index + self._local_epoch_index
     

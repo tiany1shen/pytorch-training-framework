@@ -1,5 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
+from math import ceil
+import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -240,3 +242,79 @@ class EvaluatePlugin(Plugin):
                 assert name in self.trainer.trackers, f"No such tracked scalar: {name}"
                 tracker: Tracker = self.trainer.trackers[name]
                 tracker.track_value(metric_value)
+
+
+class _ProgressBar:
+    elapse_mark = "#"
+    remain_mark = "="
+    
+    def __init__(self, total_step: int, start_step: int = 0, length: int = 10) -> None:
+        self.total_step: int = total_step
+        self.start_step: int = start_step
+        self._local_step: int = 0
+        
+        self.length = length
+    
+    @property
+    def current_step(self) ->int:
+        return self._local_step + self.start_step
+    
+    @property
+    def elapse_len(self) -> int:
+        real_total_step = self.total_step - self.start_step
+        return ceil(self._local_step / real_total_step * self.length)
+    
+    @property
+    def remain_len(self) -> int:
+        return (self.length - self.elapse_len)
+    
+    def step(self):
+        if self.current_step == self.total_step:
+            self.empty()
+        self._local_step += 1
+        return self
+    
+    def empty(self):
+        self._local_step = 0
+        return self
+    
+    def __str__(self):
+        num_left_blank = len(str(self.total_step)) - len(str(self.current_step))
+        ratio = num_left_blank * " " + f"{self.current_step}/{self.total_step}"
+        bar = self.elapse_mark * self.elapse_len + self.remain_mark * self.remain_len
+        return "[" + bar + "] (" + ratio + ")" 
+
+
+class ProgressBarPlugin(Plugin):
+    def __init__(self, bar_length: int = 10) -> None:
+        self.bar_length: int = bar_length
+        
+        self.epoch_bar: _ProgressBar
+        self.step_bar: _ProgressBar
+    
+    def __str__(self) -> str:
+        bar_str = f"Epoch {str(self.epoch_bar)} | Step {str(self.step_bar)}"
+        return f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] " + bar_str
+        
+    @override
+    def before_loop(self, dataset: SizedDataset, *args, **kwargs):
+        self.epoch_bar = _ProgressBar(
+            total_step=self.trainer.start_epoch + self.trainer.num_epochs,
+            start_step=self.trainer.start_epoch,
+            length=self.bar_length
+        )
+        self.step_bar = _ProgressBar(
+            total_step=len(dataset) // self.trainer.batch_size,
+            length=self.bar_length
+        )
+        print(self, end="\r", flush=True)
+    
+    @override
+    def before_epoch(self, *args, **kwargs):
+        self.epoch_bar.step()
+        print(self, end="\r", flush=True)
+    
+    @override
+    def before_step(self, *args, **kwargs):
+        self.step_bar.step()
+        print(self, end="\r", flush=True)
