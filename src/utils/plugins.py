@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Plugin", "LoadCheckpointPlugin", "SaveCheckpointPlugin", 
     "InitializeNetworkPlugin", "LossLoggerPlugin", "MetricLoggerPlugin",
-    "EvaluatePlugin"
+    "EvaluatePlugin", "ProgressBarPlugin"
 ]
 
 
