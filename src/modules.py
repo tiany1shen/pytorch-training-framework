@@ -6,9 +6,8 @@ from torch.utils.data import Dataset, DataLoader, RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn import Module
 from torch.optim import Optimizer
-from pathlib import Path
 
-from .functionals import move_batch
+from .utils import move_batch
 from .plugins import Plugin, check_plugin
 
 from typing import cast, Callable, Literal, Iterable

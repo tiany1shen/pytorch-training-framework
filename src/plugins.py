@@ -4,8 +4,8 @@ from math import ceil
 import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from .utils import check_file_path
 
-from .functionals import check_file_path
 from typing import TYPE_CHECKING
 from typing_extensions import override, Self
 
