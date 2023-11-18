@@ -6,18 +6,18 @@ __all__ = [
     "check_file_path", "move_batch"
 ]
 
-def check_file_path(path: pathlib.Path | str | None) -> pathlib.Path | None:
+def check_file_path(path: pathlib.Path | str) -> pathlib.Path:
     r""" Check and return the given path.
     
-    If the given path is `None` or do not exist, return `None`; else return 
-    the a `pathlib.Path` object of it.
+    If the given path exists, return a `pathlib.Path` object of it.
     """
-    if path is None:
-        return 
     _path = pathlib.Path(path)
     if _path.exists():
         return _path
-    return None
+    else:
+        raise FileNotFoundError(
+            f"No such file: '{_path}'"
+        )
 
 
 def move_batch(batch: Batch, device: torch.device) -> Batch:

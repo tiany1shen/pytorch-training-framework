@@ -3,14 +3,14 @@ from pathlib import Path
 from math import ceil
 import datetime
 import torch
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from .utils import check_file_path
 
 from typing import TYPE_CHECKING
 from typing_extensions import override, Self
 
 if TYPE_CHECKING:
-    from .modules import Trainer, NeuralNetwork, SizedDataset, Tracker, EvaluateModel
+    from .modules import Trainer, NeuralNetwork, SizedDataset, _Tracker, EvaluateModel
 
 __all__ = [
     "Plugin", "LoadCheckpointPlugin", "SaveCheckpointPlugin", 
@@ -40,7 +40,7 @@ class Plugin:
     - `before_step`:  Before Processing batches in each step.
     - `after_step`:   After updating weights and clearing their gradients in each step.
     """
-    trainer: Trainer | None = None
+    trainer: Trainer
     def before_loop(self, *args, **kwargs):
         pass 
     
@@ -62,12 +62,12 @@ class Plugin:
 
 class InitializeNetworkPlugin(Plugin):
     def __init__(self, weight_file: Path | str | None = None) -> None:
-        self.reserved_weight_file = weight_file
+        self.reserved_weight_file = None if weight_file is None else check_file_path(weight_file)
     
     @property
-    def weight_file(self) -> Path:
+    def weight_file(self) -> Path | None:
         return getattr(
-            self.trainer, "pretrained_weight_file", check_file_path(self.reserved_weight_file)
+            self.trainer, "pretrained_weight_file", self.reserved_weight_file
         )
     
     @property
@@ -84,18 +84,18 @@ class InitializeNetworkPlugin(Plugin):
 
 class LoadCheckpointPlugin(Plugin):
     def __init__(self, checkpoint_dir: Path | str) -> None:
-        self.checkpoint_dir: Path | None = check_file_path(checkpoint_dir)
+        try:
+            self.checkpoint_dir: Path = check_file_path(checkpoint_dir)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"No such checkpoint directory: '{checkpoint_dir}'"
+            )
         self.state_files: dict[str, Path] = {}
         self.check_checkpoint_dir()
     
     def check_checkpoint_dir(self) -> None:
-        if self.checkpoint_dir is None:
-            raise FileNotFoundError(
-                f"No such checkpoint directory: '{self.checkpoint_dir}'"
-            )
-        else:
-            for module_name in ["trainer", "optimizer", "network"]:
-                self.check_module_state_file(module_name)
+        for module_name in ["trainer", "optimizer", "network"]:
+            self.check_module_state_file(module_name)
     
     def check_module_state_file(self, module_name: str) -> None:
         file_name = f"{module_name}_state_dict.pth"
@@ -162,18 +162,18 @@ class _TensorboardLoggerPlugin(Plugin):
         self.tracker_names: list[str]
     
     @property
-    def writer(self) -> SummaryWriter | None:
+    def writer(self) -> SummaryWriter:
         return self.trainer.writer
     
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
     
-    def get_tracker(self, name: str) -> Tracker:
+    def get_tracker(self, name: str) -> _Tracker:
         return self.trainer.trackers[name]
     
     @override
     def before_loop(self, *args, **kwargs):
-        if self.writer is None:
+        if not hasattr(self.trainer, "writer"):
             self.trainer.writer = SummaryWriter(self.log_dir)
         Path(self.writer.get_logdir()).mkdir(exist_ok=True, parents=True)
 
@@ -211,7 +211,7 @@ class LossLoggerPlugin(_TensorboardLoggerPlugin):
                 
                 self.log_scalar(tag, value, step)
             if len(self.tracker_names) > 1:
-                self.log_scalar("total_loss", total_loss, step)
+                self.log_scalar("total_loss", total_loss, current_step)
 
 class MetricLoggerPlugin(_TensorboardLoggerPlugin):
     
@@ -249,7 +249,7 @@ class EvaluatePlugin(Plugin):
             metric_dict: dict[str, float] = self.eval_model.evaluate(network)
             for name, metric_value in metric_dict.items():
                 assert name in self.trainer.trackers, f"No such tracked scalar: {name}"
-                tracker: Tracker = self.trainer.trackers[name]
+                tracker: _Tracker = self.trainer.trackers[name]
                 tracker.track_value(metric_value)
 
 

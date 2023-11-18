@@ -2,17 +2,19 @@ import os
 import random
 import numpy
 import torch
+import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader, RandomSampler
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from torch.nn import Module
 from torch.optim import Optimizer
+from torch import version as torch_version
 
 from .utils import move_batch
 from .plugins import Plugin, check_plugin
 
 from typing import cast, Callable, Literal, Iterable
 from typing_extensions import Self, override
-from .typing_hints import Data, Batch, ScalarTensor, DeviceType, TrainerStateDict, TrainModuleDict
+from .typing_hints import Data, Batch, ScalarTensor, DeviceType, TrainerStateDict
 
 __all__ = [
     "SizedDataset", "NeuralNetwork", "TrainModel", "EvaluateModel",
@@ -240,9 +242,9 @@ class Trainer:
             self.use_deterministic_algorithms()
         
         self.plugins: list[Plugin] = []
-        self.trackers: dict[str: _Tracker] = {}
+        self.trackers: dict[str, _Tracker] = {}
         self.register_trackers("loss", self.train_model.loss_weights)
-        self.writer: SummaryWriter | None = None
+        self.writer: SummaryWriter
     
     @property
     def is_epoch_based(self) -> bool:
@@ -258,7 +260,7 @@ class Trainer:
     
     @property
     def step_in_epoch(self) -> int:
-        return self._local_in_epoch_step_index
+        return self._local_step_in_epoch_index
     
     @property
     def local_step(self) -> int:
@@ -281,9 +283,9 @@ class Trainer:
         return self
     
     def use_deterministic_algorithms(self) -> Self:
-        torch.backends.cudnn.benchmark = False
+        cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
-        if torch.version.cuda >= "10.2":
+        if torch_version.cuda >= "10.2":
             os.environ['CUBLAS_WORKSPACE_CONFIG']=':16:8' # cuda >= 10.2
         return self
     
@@ -297,7 +299,7 @@ class Trainer:
         self.trackers[name] = tracker
         return self
     
-    def track_tensor_dict(self, tensor_dict: dict[str: ScalarTensor]) -> Self:
+    def track_tensor_dict(self, tensor_dict: dict[str, ScalarTensor]) -> Self:
         for name, scalar_tensor in tensor_dict.items():
             assert name in self.trackers, f"No such tracked scalar: {name}"
             tracker: _Tracker = self.trackers[name]
@@ -325,7 +327,7 @@ class Trainer:
         optimizer: Optimizer
     ) -> None:
         dataloader = self.build_dataloader(dataset)
-        train_modules: TrainModuleDict = {
+        train_modules: dict = {
             "dataset": dataset, "network": network, "optimizer": optimizer
         }
         self.before_loop(train_modules)

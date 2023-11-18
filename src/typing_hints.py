@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from .modules import SizedDataset, NeuralNetwork
 
 __all__ = [
-    "ScalarTensor", "Batch", "DeviceType", "TrainerStateDict", "TrainModuleDict"
+    "ScalarTensor", "Batch", "DeviceType", "TrainerStateDict"
 ]
 
 r"""
@@ -39,8 +39,3 @@ DeviceType: TypeAlias = torch.device | int | str
 class TrainerStateDict(TypedDict):
     seed: int
     epoch: int
-
-class TrainModuleDict(TypedDict):
-    dataset: SizedDataset
-    network: NeuralNetwork
-    optimizer: torch.optim.Optimizer
