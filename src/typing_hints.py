@@ -1,13 +1,13 @@
 from __future__ import annotations
 import torch
-from typing import TypeAlias, TypedDict, Sequence, Mapping, TYPE_CHECKING
+from typing import TypeVar, TypeAlias, TypedDict, Sequence, Mapping, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
     from .modules import SizedDataset, NeuralNetwork
 
 __all__ = [
-    "ScalarTensor", "Batch", "DeviceType", "TrainerStateDict"
+    "ScalarType", "DataType", "DeviceType", "TrainerStateDict"
 ]
 
 r"""
@@ -29,10 +29,8 @@ Three typical types of batch are legitimate in this framework:
 - a sequence (list, tuple) of batched tensor
 - a mapping (dictionary) of batched tensor
 """
-ScalarTensor: TypeAlias = torch.Tensor
-BatchedTensor: TypeAlias = torch.Tensor
-Data: TypeAlias = torch.Tensor | Sequence[torch.Tensor] | Mapping[str, torch.Tensor]
-Batch: TypeAlias = BatchedTensor | Sequence[BatchedTensor] | Mapping[str, BatchedTensor]
+ScalarType: TypeAlias = torch.Tensor
+DataType = TypeVar("DataType", torch.Tensor, Sequence[torch.Tensor], Mapping[str, torch.Tensor])
 
 DeviceType: TypeAlias = torch.device | int | str
 

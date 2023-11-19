@@ -1,6 +1,7 @@
 import torch
 import pathlib
-from .typing_hints import Batch
+from typing import cast
+from .typing_hints import DataType
 
 __all__ = [
     "check_file_path", "move_batch"
@@ -19,8 +20,7 @@ def check_file_path(path: pathlib.Path | str) -> pathlib.Path:
             f"No such file: '{_path}'"
         )
 
-
-def move_batch(batch: Batch, device: torch.device) -> Batch:
+def move_batch(batch: DataType, device: torch.device) -> DataType:
     r""" Move a tensor batch to a specific device.
     
     The batch should be among the following forms:
@@ -30,12 +30,28 @@ def move_batch(batch: Batch, device: torch.device) -> Batch:
     """
     if isinstance(batch, torch.Tensor):
         return batch.to(device)
+    
     elif isinstance(batch, list):
-        return [tensor.to(device) for tensor in batch]
+        new_list: list[torch.Tensor] = []
+        for tensor in batch:
+            new_list.append(tensor.to(device))
+        return cast(DataType, new_list)
+    
     elif isinstance(batch, dict):
-        return {key: batch[key].to(device) for key in batch}
+        new_dict: dict[str, torch.Tensor] = {}
+        for key, tensor in batch.items():
+            new_dict[key] = tensor.to(device)
+        return cast(DataType, new_dict)
+    
     else:
         raise TypeError(
             f"A batch should be of type `torch.Tensor`, `list` or `dict`, but "
             f"got {type(batch)}"
         )
+
+def reset_parameters_data(module: torch.nn.Module) -> None:
+    if hasattr(module, "reset_parameters"):
+        module.reset_parameters() # type: ignore
+        return 
+    for child_module in module.children():
+        reset_parameters_data(child_module)

@@ -206,12 +206,12 @@ class LossLoggerPlugin(_TensorboardLoggerPlugin):
                 
                 tag = f"loss/{name}"
                 value = self.get_tracker(name).get_value()
-                step = current_step
+                step = current_step * self.trainer.batch_size
                 total_loss += value * self.trainer.train_model.loss_weights[name]
                 
                 self.log_scalar(tag, value, step)
             if len(self.tracker_names) > 1:
-                self.log_scalar("total_loss", total_loss, current_step)
+                self.log_scalar("total_loss", total_loss, current_step * self.trainer.batch_size)
 
 class MetricLoggerPlugin(_TensorboardLoggerPlugin):
     
@@ -280,7 +280,8 @@ class _ProgressBar:
     def step(self):
         if self.current_step == self.total_step:
             self.empty()
-        self._local_step += 1
+        else:
+            self._local_step += 1
         return self
     
     def empty(self):
@@ -321,6 +322,7 @@ class ProgressBarPlugin(Plugin):
     @override
     def before_epoch(self, *args, **kwargs):
         self.epoch_bar.step()
+        self.step_bar.step()
         print(self, end="\r", flush=True)
     
     @override

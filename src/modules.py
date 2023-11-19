@@ -9,12 +9,12 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from torch import version as torch_version
 
-from .utils import move_batch
+from .utils import move_batch, reset_parameters_data
 from .plugins import Plugin, check_plugin
 
 from typing import cast, Callable, Literal, Iterable
 from typing_extensions import Self, override
-from .typing_hints import Data, Batch, ScalarTensor, DeviceType, TrainerStateDict
+from .typing_hints import DataType, ScalarType, DeviceType, TrainerStateDict
 
 __all__ = [
     "SizedDataset", "NeuralNetwork", "TrainModel", "EvaluateModel",
@@ -31,7 +31,7 @@ class SizedDataset(Dataset):
     
     `torch.utils.data.Dataset` class with a `__len__` method.
     """
-    def __getitem__(self, index: int) -> Data:
+    def __getitem__(self, index: int) -> DataType:
         raise NotImplementedError
     
     def __len__(self) -> int:
@@ -57,7 +57,8 @@ class NeuralNetwork(Module):
         return next(self.parameters()).device
     
     def init_weights(self) -> Self:
-        raise NotImplementedError
+        reset_parameters_data(self)
+        return self
     
 
 #===============================================================================
@@ -93,12 +94,12 @@ class TrainModel(_Model):
     def loss_weights(self) -> dict[str, float]:
         return getattr(self, "_loss_weights")
     
-    def compute_loss(self, network: NeuralNetwork, batch: Batch) -> dict[str, ScalarTensor]:
+    def compute_loss(self, network: NeuralNetwork, batch: DataType) -> dict[str, ScalarType]:
         # return the loss dict computed from the given batch.
         raise NotImplementedError
     
-    def summary_loss(self, loss_dict: dict[str, ScalarTensor]) -> ScalarTensor:
-        total_loss: ScalarTensor = cast(ScalarTensor, 0)
+    def summary_loss(self, loss_dict: dict[str, ScalarType]) -> ScalarType:
+        total_loss: ScalarType = cast(ScalarType, 0)
         for loss_name in loss_dict:
             total_loss += self.loss_weights[loss_name] * loss_dict[loss_name]
         return total_loss
@@ -299,7 +300,7 @@ class Trainer:
         self.trackers[name] = tracker
         return self
     
-    def track_tensor_dict(self, tensor_dict: dict[str, ScalarTensor]) -> Self:
+    def track_tensor_dict(self, tensor_dict: dict[str, ScalarType]) -> Self:
         for name, scalar_tensor in tensor_dict.items():
             assert name in self.trackers, f"No such tracked scalar: {name}"
             tracker: _Tracker = self.trackers[name]
