@@ -19,6 +19,7 @@ __pycache__/
 /develop
 /develop.ipynb
 
-/data
+/data/*
+!/data/mammals_split/
 /checkpoints
 /OUTPUTs
