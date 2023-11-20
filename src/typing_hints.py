@@ -37,3 +37,8 @@ DeviceType: TypeAlias = torch.device | int | str
 class TrainerStateDict(TypedDict):
     seed: int
     epoch: int
+
+class LearningRateSateDict(TypedDict):
+    lr: float
+    epoch: int
+    index: int # param_group_index

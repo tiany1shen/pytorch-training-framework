@@ -6,8 +6,9 @@ import torch
 from torch.utils.tensorboard.writer import SummaryWriter
 from .utils import check_file_path
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from typing_extensions import override, Self
+from .typing_hints import LearningRateSateDict
 
 if TYPE_CHECKING:
     from .modules import Trainer, NeuralNetwork, SizedDataset, _Tracker, EvaluateModel
@@ -60,6 +61,10 @@ class Plugin:
         pass 
 
 
+#===============================================================================
+#   Intialize Network Weights
+#===============================================================================
+
 class InitializeNetworkPlugin(Plugin):
     def __init__(self, weight_file: Path | str | None = None) -> None:
         self.reserved_weight_file = None if weight_file is None else check_file_path(weight_file)
@@ -80,6 +85,11 @@ class InitializeNetworkPlugin(Plugin):
             network.load_state_dict(torch.load(self.weight_file))
         else:
             network.init_weights()
+
+
+#===============================================================================
+#   Load & Save Checkpoint
+#===============================================================================
 
 
 class LoadCheckpointPlugin(Plugin):
@@ -154,7 +164,33 @@ class SaveCheckpointPlugin(Plugin):
         saving_file: Path = self.saving_path / "optimizer_state_dict.pth"
         torch.save(optimizer.state_dict(), saving_file)
         return self
-        
+
+
+#===============================================================================
+#   Adjust Learning Rate
+#===============================================================================
+
+
+class AdjustLearningRatePlugin(Plugin):
+    def __init__(self, adjust_fn: Callable):
+        self.adjust_fn = adjust_fn
+    
+    @override
+    def before_epoch(self, optimizer, *args, **kwargs):
+        for i, param_group in enumerate(optimizer.param_groups):
+            lr_state_dict: LearningRateSateDict = {
+                "lr": param_group["lr"],
+                "epoch": self.trainer.epoch,
+                "index": i
+            }
+            param_group["lr"] = self.adjust_fn(**lr_state_dict)
+
+
+#===============================================================================
+#   Tensorboard Logger 
+#===============================================================================
+
+
 class _TensorboardLoggerPlugin(Plugin):
     def __init__(self, log_dir: Path | str, log_period: int) -> None:
         self.log_dir = log_dir
@@ -176,7 +212,6 @@ class _TensorboardLoggerPlugin(Plugin):
         if not hasattr(self.trainer, "writer"):
             self.trainer.writer = SummaryWriter(self.log_dir)
         Path(self.writer.get_logdir()).mkdir(exist_ok=True, parents=True)
-
 
 class LossLoggerPlugin(_TensorboardLoggerPlugin):
     
@@ -233,6 +268,23 @@ class MetricLoggerPlugin(_TensorboardLoggerPlugin):
                 
                 self.log_scalar(tag, value, step)
 
+class LearningRateLoggerPlguin(_TensorboardLoggerPlugin):
+    
+    @override
+    def after_epoch(self, optimizer, *args, **kwargs):
+        for i, param_group in enumerate(optimizer.param_groups):
+            
+            tag = f"lr/param_group_{i}"
+            value = param_group["lr"]
+            step = self.trainer.epoch 
+            
+            self.log_scalar(tag, value, step)
+
+
+#===============================================================================
+#   Evaluate
+#===============================================================================
+
 
 class EvaluatePlugin(Plugin):
     def __init__(self, eval_model: EvaluateModel, eval_period: int) -> None:
@@ -251,6 +303,11 @@ class EvaluatePlugin(Plugin):
                 assert name in self.trainer.trackers, f"No such tracked scalar: {name}"
                 tracker: _Tracker = self.trainer.trackers[name]
                 tracker.track_value(metric_value)
+
+
+#===============================================================================
+#   Progress Bar
+#===============================================================================
 
 
 class _ProgressBar:
@@ -278,10 +335,7 @@ class _ProgressBar:
         return (self.length - self.elapse_len)
     
     def step(self):
-        if self.current_step == self.total_step:
-            self.empty()
-        else:
-            self._local_step += 1
+        self._local_step += 1
         return self
     
     def empty(self):
@@ -322,7 +376,7 @@ class ProgressBarPlugin(Plugin):
     @override
     def before_epoch(self, *args, **kwargs):
         self.epoch_bar.step()
-        self.step_bar.step()
+        self.step_bar.empty()
         print(self, end="\r", flush=True)
     
     @override
