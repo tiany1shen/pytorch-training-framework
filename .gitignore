@@ -21,5 +21,6 @@ __pycache__/
 
 /data/*
 !/data/mammals_split/
+!/data/carvana_split/
 /checkpoints
 /OUTPUTs

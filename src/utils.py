@@ -25,11 +25,18 @@ def move_batch(batch: DataType, device: torch.device) -> DataType:
     
     The batch should be among the following forms:
     - `torch.Tensor`
+    - `tuple[torch.Tensor]`
     - `list[torch.Tensor]`
     - `dict[str, torch.Tensor]`
     """
     if isinstance(batch, torch.Tensor):
         return batch.to(device)
+    
+    elif isinstance(batch, tuple):
+        new_list: list[torch.Tensor] = []
+        for tensor in batch:
+            new_list.append(tensor.to(device))
+        return cast(DataType, tuple(new_list))
     
     elif isinstance(batch, list):
         new_list: list[torch.Tensor] = []
